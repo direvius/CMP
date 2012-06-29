@@ -68,7 +68,15 @@ public class CMPClient {
                                 int length = is.read()<<8 + is.read();
                                 byte[] buff = new byte[length];
                                 is.read(buff);
-                                inbox.add(buff);
+                                if(is.read() == ETX){
+                                    int crc16 = is.read()<<8 + is.read();
+                                    if(crc16 == crc16(buff)){
+                                        inbox.add(buff);
+                                        os.write(ACK);
+                                    } else{
+                                        os.write(NAK);
+                                    }
+                                }
                             }
                             break;
                         case ACK:
@@ -106,7 +114,7 @@ public class CMPClient {
         synchronized (os) {
             os.write(STX);
             os.write(bb.array());
-            os.write(crc16(bb.array()));
+            os.write(ByteBuffer.allocate(2).putShort(crc16(bb.array())).array());
         }
     }
     
@@ -121,7 +129,7 @@ public class CMPClient {
         keepAliver = ses.scheduleAtFixedRate(new KeepAliver(), 15, 15, TimeUnit.SECONDS);
     }
 
-    private byte[] crc16(byte[] buff) {
+    private short crc16(byte[] buff) {
         short nCRC16 = 0;
         for (byte b : buff) {
             short a1 = (short) (b ^ nCRC16);
@@ -129,6 +137,6 @@ public class CMPClient {
             short a3 = (short) (a1 ^ a2);
             nCRC16 = (short) ((nCRC16 >> 8) ^ (a3 >> 12) ^ (a3 >> 5) ^ a3);
         }
-        return ByteBuffer.allocate(2).putShort(nCRC16).array();
+        return nCRC16;
     }
 }
