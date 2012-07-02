@@ -17,7 +17,9 @@ public class App
         try {
             Socket s = new Socket("10.0.3.70", 688);
             CMPClient cc = new CMPClient(s.getInputStream(), s.getOutputStream());
+            cc.open();
             Thread.sleep(30000);
+            cc.close();
             System.exit(0);
         } catch (InterruptedException ex) {
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
