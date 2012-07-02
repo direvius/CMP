@@ -39,7 +39,7 @@ public class CMPClient {
     private State state = State.DOWN;
     private static final ExecutorService es = Executors.newCachedThreadPool();
     private final ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
-    private final Future<?> listener;
+    //private final Future<?> listener;
     private final ScheduledFuture<?> keepAliver;
 
     private class CMPListener implements Runnable {
@@ -84,7 +84,6 @@ public class CMPClient {
                             // do nothing
                             break;
                         case EOT:
-                            listener.cancel(false);
                             keepAliver.cancel(true);
                             is.close();
                             os.close();
@@ -102,6 +101,7 @@ public class CMPClient {
             synchronized(os){
                 try {
                     os.write(BEL);
+                    System.out.println(is.read());
                 } catch (IOException ex) {
                     Logger.getLogger(CMPClient.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -110,23 +110,48 @@ public class CMPClient {
         
     }
     public void send(byte[] message) throws IOException {
-        ByteBuffer bb = ByteBuffer.allocate(message.length + 3).putShort((short) message.length).put(message).put(ETX);
-        synchronized (os) {
-            os.write(STX);
-            os.write(bb.array());
-            os.write(ByteBuffer.allocate(2).putShort(crc16(bb.array())).array());
+        ByteBuffer bb = ByteBuffer.allocate(message.length + 3)
+                .putShort((short) message.length)
+                .put(message)
+                .put(ETX);
+        ByteBuffer bb2 = ByteBuffer.allocate(bb.capacity()+3);
+        bb2.put(STX)
+                .put(bb.array())
+                .putShort(crc16(bb.array()));
+        os.write(bb2.array());
+    }
+    public void close() throws IOException {
+        synchronized(os){
+            os.write(EOT);
+            //listener.cancel(true);
+            keepAliver.cancel(true);
+            is.close();
+            os.close();
         }
     }
-    
+    public void open() throws IOException {
+        ByteBuffer bb = ByteBuffer.allocate(3);
+        bb.put(ENQ).put((byte)2).put((byte)0);
+        os.write(bb.array());
+    }
     public byte[] waitMessage(){
         return inbox.remove();
     }
-    
+    public byte[] read() throws IOException{
+        synchronized(os){
+            int nAvailable = is.available();
+            if(nAvailable>0){
+                byte[] buff = new byte[nAvailable];
+                is.read(buff);
+                return buff;
+            }else return new byte[0];
+        }
+    }
     public CMPClient(InputStream is, OutputStream os) {
         this.is = is;
         this.os = os;
-        listener = es.submit(new CMPListener());
-        keepAliver = ses.scheduleAtFixedRate(new KeepAliver(), 15, 15, TimeUnit.SECONDS);
+        //listener = es.submit(new CMPListener());
+        keepAliver = ses.scheduleAtFixedRate(new KeepAliver(), 3, 3, TimeUnit.SECONDS);
     }
 
     private short crc16(byte[] buff) {
