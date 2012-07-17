@@ -18,6 +18,8 @@ public class CMPClient {
 
     private final InputStream is;
     private final OutputStream os;
+    private static final int ENQ_RESP_LEN = 8;
+    private static final byte[] PROTO_VERSION = {0x1, 0x0};
     private static final byte STX = 0x02;
     private static final byte ETX = 0x03;
     private static final byte EOT = 0x04;
@@ -70,10 +72,15 @@ public class CMPClient {
 
     public synchronized void open() throws IOException {
         os.write(ENQ);
-        os.write(2);
-        os.write(0);
+        os.write(PROTO_VERSION);
         os.flush();
-        System.out.println(read().length);
+        if(is.read() == ACK){
+            byte[] buff = new byte[ENQ_RESP_LEN];
+            is.read(buff);
+            System.out.println(byteArrayToString(buff));
+        } else {
+            throw new IOException("Could not establish connection");
+        }
     }
 
     public synchronized byte[] read() throws IOException {   
@@ -99,5 +106,13 @@ public class CMPClient {
             nCRC16 = (short) ((nCRC16 >> 8) ^ (a3 >> 12) ^ (a3 >> 5) ^ a3);
         }
         return nCRC16;
+    }
+    public static String byteArrayToString(byte[] bytes){
+        StringWriter sw = new StringWriter();
+        for (byte theByte : bytes)
+        {
+           sw.append(String.format(" 0x%02X", theByte));
+        }
+        return sw.toString();
     }
 }
