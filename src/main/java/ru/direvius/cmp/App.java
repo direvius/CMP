@@ -4,8 +4,8 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.security.GeneralSecurityException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Hello world!
@@ -13,6 +13,7 @@ import java.util.logging.Logger;
  */
 public class App 
 {
+    private static final Logger logger = LoggerFactory.getLogger("Main");
     private static byte[] keyBytes = {0x20, 0x21, 0x22, 0x23, 0x24, 0x26, 0x27, 0x28};
     public static void main( String[] args )
     {
@@ -26,13 +27,13 @@ public class App
             cc.close();
             System.exit(0);
         } catch (GeneralSecurityException ex) {
-            Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+            logger.error("Cryptography problem", ex);
         } catch (InterruptedException ex) {
-            Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+            logger.error("Girl, interrupted", ex);
         } catch (UnknownHostException ex) {
-            Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+            logger.error("Host not found while opening a connection", ex);
         } catch (IOException ex) {
-            Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
+            logger.error("Failed to comunicate", ex);
         } 
     }
 }

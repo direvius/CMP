@@ -4,7 +4,6 @@
  */
 package ru.direvius.cmp;
 
-import java.io.UnsupportedEncodingException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import javax.crypto.*;
