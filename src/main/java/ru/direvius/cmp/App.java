@@ -12,6 +12,7 @@ import java.util.logging.Logger;
  */
 public class App 
 {
+    private static byte[] keyBytes = {0x20, 0x21, 0x22, 0x23, 0x24, 0x26, 0x27, 0x28};
     public static void main( String[] args )
     {
         try {
@@ -27,7 +28,6 @@ public class App
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
             Logger.getLogger(App.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        
+        } 
     }
 }
