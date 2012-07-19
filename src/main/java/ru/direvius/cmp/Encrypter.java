@@ -26,11 +26,11 @@ public class Encrypter {
 
     public byte[] encrypt(byte[] message) throws IllegalBlockSizeException, BadPaddingException {
         byte[] enc = ecipher.doFinal(message);
-        return message;
+        return enc;
     }
 
     public byte[] decrypt(byte[] message) throws IllegalBlockSizeException, BadPaddingException {
-        byte[] utf8 = dcipher.doFinal(message);
-        return message;
+        byte[] dec = dcipher.doFinal(message);
+        return dec;
     }
 }

@@ -1,21 +1,21 @@
-/*
- * To change this template, choose Tools | Templates
- * and open the template in the editor.
- */
 package ru.direvius.cmp;
 
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.concurrent.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -23,6 +23,8 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class CMPClient {
 
+    private static final Logger logger = LoggerFactory.getLogger(CMPClient.class);
+    
     private final InputStream is;
     private final OutputStream os;
     private static final int ENQ_RESP_LEN = 8;
@@ -38,15 +40,15 @@ public class CMPClient {
     private static final String DES_TRANSFORMATION = "DES/ECB/NoPadding";
     private static final byte[] TERMINAL_KEY = hexStringToByteArray("C3-5F-ED-30-8F-9C-34-F4-E7-E4-83-3C-67-67-13-EC-24-08-0C-3E-34-C8-F7-BD");
     private static final byte[] TRANSPORT_KEY = hexStringToByteArray("EF-B1-CF-18-5A-9E-DB-B7-0E-C7-F8-0A-E7-28-9A-EA-24-45-1A-EB-4E-09-E2-FE");
-    private static final SecretKey terminalKey = new SecretKeySpec(TERMINAL_KEY, "DES");
-    private static final SecretKey transportKey = new SecretKeySpec(TRANSPORT_KEY, "DES");
+    private static final SecretKey terminalKey = new SecretKeySpec(TERMINAL_KEY, "DESede");
+    private static final SecretKey transportKey = new SecretKeySpec(TRANSPORT_KEY, "DESede");
     private Encrypter sessionEncrypter;
+    private byte[] sessionKeyArray;
     private enum State {
 
         DOWN, ESTABLISHED
     }
     private State state = State.DOWN;
-    private static final ExecutorService es = Executors.newCachedThreadPool();
     private final ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
     private final ScheduledFuture<?> keepAliver;
     private SecretKey sessionKey;
@@ -56,7 +58,7 @@ public class CMPClient {
             try {
                 keepAlive();
             } catch (IOException ex) {
-                Logger.getLogger(CMPClient.class.getName()).log(Level.SEVERE, null, ex);
+                logger.error("IOException while trying to automatically keep the connection alive.", ex);
             }
         }
     }
@@ -66,9 +68,23 @@ public class CMPClient {
             os.write(BEL);
             os.flush();
             is.read();
+            logger.debug("Sent keep-alive");
         }
     }
-
+    public void sendEncrypt(byte[] message) throws IOException, GeneralSecurityException {
+        if(message.length%8 == 0){
+            send(sessionEncrypter.encrypt(message));
+        } else {
+            int ordinalPartLength = (message.length / 8) * 8;
+            ByteBuffer ordinalPart = ByteBuffer.allocate(ordinalPartLength);
+            ByteBuffer lastBytes = ByteBuffer.allocate(message.length - ordinalPartLength);
+            ordinalPart.put(message, 0, ordinalPartLength);
+            lastBytes.put(message, ordinalPartLength, message.length - ordinalPartLength);
+            ByteBuffer encryptedMessage = ByteBuffer.allocate(message.length);
+            encryptedMessage.put(sessionEncrypter.decrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
+            send(encryptedMessage.array());
+        }
+    }
     public synchronized void send(byte[] message) throws IOException {
         if(state!=State.ESTABLISHED) throw new IOException("send operation while connection is down");
         ByteBuffer bb = ByteBuffer.allocate(message.length + 3).putShort((short) message.length).put(message).put(ETX);
@@ -76,6 +92,7 @@ public class CMPClient {
         bb2.put(STX).put(bb.array()).putShort(crc16(bb.array()));
         os.write(bb2.array());
         os.flush();
+        logger.debug("Sent a message: {}", byteArrayToString(message));
     }
 
     public synchronized void close() throws IOException {
@@ -86,59 +103,71 @@ public class CMPClient {
         is.close();
         os.close();
         state = State.DOWN;
+        logger.debug("Closed connection");
     }
 
     public synchronized void open() throws IOException {
         if(state==State.ESTABLISHED) return; // already opened
-        
+        logger.debug("Opening connection...");
         os.write(ENQ);
         os.write(PROTO_VERSION);
         os.flush();
+        logger.debug("Sent ENQ byte and protocol version ({})", PROTO_VERSION);
         if(is.read() == ACK){
             try {
                 byte[] buff = new byte[ENQ_RESP_LEN];
                 is.read(buff);
+                logger.debug("Received a crypted session key: {}", byteArrayToString(buff));
                 
                 Encrypter tdesTerminalEncrypter = new Encrypter(TDES_TRANSFORMATION,terminalKey);
                 Encrypter tdesTransportEncrypter = new Encrypter(TDES_TRANSFORMATION,transportKey);
                 
                 byte [] decryptedKey = tdesTerminalEncrypter.decrypt(buff);
+                logger.debug("Decrypted a key: {}", byteArrayToString(decryptedKey));
                 decryptedKey[7] = 0x7;
-                byte [] encryptedKey = tdesTransportEncrypter.encrypt(decryptedKey);
-                
-                sessionKey = new SecretKeySpec(encryptedKey, "DES");
-                
+                sessionKeyArray = tdesTransportEncrypter.encrypt(decryptedKey);
+                logger.debug("Encrypted a key (session key): {}", byteArrayToString(sessionKeyArray));
+                sessionKey = new SecretKeySpec(sessionKeyArray, "DES");
                 sessionEncrypter = new Encrypter(DES_TRANSFORMATION, sessionKey);
-                
                 state = State.ESTABLISHED;
-            } catch (IllegalBlockSizeException ex) {
-                Logger.getLogger(CMPClient.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (BadPaddingException ex) {
-                Logger.getLogger(CMPClient.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (NoSuchAlgorithmException ex) {
-                Logger.getLogger(CMPClient.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (NoSuchPaddingException ex) {
-                Logger.getLogger(CMPClient.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (InvalidKeyException ex) {
-                Logger.getLogger(CMPClient.class.getName()).log(Level.SEVERE, null, ex);
+                logger.debug("Opened connection");
+            } catch (GeneralSecurityException ex) {
+                logger.error("Could not make session key cryptography.", ex);
             }
         } else {
             throw new IOException("Could not establish connection");
         }
     }
-
+    public byte[] receiveDecrypt() throws IOException, GeneralSecurityException {
+        byte[] message = receive();
+        if(message.length%8 == 0){
+            return sessionEncrypter.decrypt(message);
+        } else {
+            int ordinalPartLength = (message.length / 8) * 8;
+            ByteBuffer ordinalPart = ByteBuffer.allocate(ordinalPartLength);
+            ByteBuffer lastBytes = ByteBuffer.allocate(message.length - ordinalPartLength);
+            ordinalPart.put(message, 0, ordinalPartLength);
+            lastBytes.put(message, ordinalPartLength, message.length - ordinalPartLength);
+            ByteBuffer decryptedMessage = ByteBuffer.allocate(message.length);
+            decryptedMessage.put(sessionEncrypter.decrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
+            return decryptedMessage.array();
+        }
+    }
     public synchronized byte[] receive() throws IOException { 
+        logger.debug("Receiving message...");
         if(state!=State.ESTABLISHED) throw new IOException("receive operation while connection is down");
         byte[] buff = new byte[1024];
         int bytesRead = is.read(buff);
         ByteBuffer bb = ByteBuffer.allocate(bytesRead);
         bb.put(buff,0, bytesRead);
+        logger.debug("Received a message: {}", byteArrayToString(bb.array()));
         return bb.array();
     }
 
     public CMPClient(InputStream is, OutputStream os) {
         this.is = new BufferedInputStream(is);
         this.os = new BufferedOutputStream(os);
+        logger.debug("Scheduling a keep-aliver...");
         keepAliver = ses.scheduleAtFixedRate(new KeepAliver(), 3, 3, TimeUnit.SECONDS);
     }
 
@@ -154,9 +183,9 @@ public class CMPClient {
     }
     public static String byteArrayToString(byte[] bytes){
         StringWriter sw = new StringWriter();
-        for (byte theByte : bytes)
-        {
-           sw.append(String.format(" 0x%02X", theByte));
+        sw.append(String.format("%02X", bytes[0]));
+        for (int i=1; i<bytes.length; i++){
+           sw.append(String.format("-%02X", bytes[i]));
         }
         return sw.toString();
     }
@@ -164,8 +193,16 @@ public class CMPClient {
         String[] bytes = s.split("-");
         ByteBuffer byteBuff = ByteBuffer.allocate(bytes.length);
         for(String b : bytes){
-            byteBuff.put(Byte.parseByte(b, 16));
+            byteBuff.put((byte)(Integer.parseInt(b, 16) - 0x100)); // O'REALLY?
         }
+        logger.debug("Converted a hex string: {}", byteArrayToString(byteBuff.array()));
         return byteBuff.array();
+    }
+    private byte[] symmetric(byte []src){
+        byte [] dst = new byte[src.length];
+        for (int i = 0; i < src.length; i++){
+            dst[i] = (byte)(src[i] ^ i ^ sessionKeyArray[i % 8]);
+        }
+        return dst;
     }
 }
