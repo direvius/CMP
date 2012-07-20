@@ -18,6 +18,7 @@ public class App
     public static void main( String[] args )
     {
         try {
+            System.setProperty("java.net.preferIPv4Stack" , "true");
             Socket s = new Socket("10.0.3.70", 688);
             CMPClient cc = new CMPClient(s.getInputStream(), s.getOutputStream());
             cc.open();

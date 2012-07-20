@@ -188,7 +188,7 @@ public class CMPClient {
         String[] bytes = s.split("-");
         ByteBuffer byteBuff = ByteBuffer.allocate(bytes.length);
         for(String b : bytes){
-            byteBuff.put((byte)(Integer.parseInt(b, 16) - 0x100)); // O'REALLY?
+            byteBuff.put((byte)(Integer.parseInt(b, 16) - 0x100));
         }
         logger.debug("Converted a hex string: {}", byteArrayToString(byteBuff.array()));
         return byteBuff.array();
