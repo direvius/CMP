@@ -25,8 +25,7 @@ public class App
             cc.sendEncrypt(CMPClient.hexStringToByteArray("01-01-01-02-04-00-87-82-F8-03-08-09-00-00-00-10-40-92-59-04-04-4F-C8-52-CE"));
             cc.receiveDecrypt();
             Thread.sleep(5000);
-            cc.close();
-            System.exit(0);
+            cc.close();       
         } catch (GeneralSecurityException ex) {
             logger.error("Cryptography problem", ex);
         } catch (InterruptedException ex) {
@@ -35,6 +34,8 @@ public class App
             logger.error("Host not found while opening a connection", ex);
         } catch (IOException ex) {
             logger.error("Failed to comunicate", ex);
-        } 
+        } finally {
+            System.exit(0);
+        }
     }
 }

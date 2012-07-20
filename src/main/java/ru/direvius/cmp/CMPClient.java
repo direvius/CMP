@@ -62,8 +62,8 @@ public class CMPClient {
         if(state == State.ESTABLISHED){
             os.write(BEL);
             os.flush();
-            is.read();
-            logger.debug("Sent keep-alive");
+            int respCode = is.read();
+            if(logger.isDebugEnabled())logger.debug("Sent keep-alive, received {}", String.format("0x%02X",respCode));
         }
     }
     public void sendEncrypt(byte[] message) throws IOException, GeneralSecurityException {
@@ -88,6 +88,17 @@ public class CMPClient {
         os.write(bb2.array());
         os.flush();
         logger.debug("Sent a message: {}", byteArrayToString(message));
+        int respCode = is.read();
+        if(logger.isDebugEnabled())logger.debug("Response code: {}", String.format("0x%02X",respCode));
+        switch(respCode){
+            case ACK:
+                logger.debug("Server responded with ACK");
+                break;
+            case NAK:
+                throw new IOException("Server responded with NAK");
+            default:
+                throw new IOException("Unknown response code");
+        }
     }
 
     public synchronized void close() throws IOException {
