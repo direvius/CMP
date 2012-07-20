@@ -128,10 +128,10 @@ public class CMPClient {
                 Encrypter tdesTerminalEncrypter = new Encrypter(TDES_TRANSFORMATION,terminalKey);
                 Encrypter tdesTransportEncrypter = new Encrypter(TDES_TRANSFORMATION,transportKey);
                 
-                byte [] decryptedKey = tdesTerminalEncrypter.decrypt(buff);
+                byte [] decryptedKey = tdesTransportEncrypter.decrypt(buff);
                 logger.debug("Decrypted a key: {}", byteArrayToString(decryptedKey));
                 decryptedKey[7] = 0x7;
-                sessionKeyArray = tdesTransportEncrypter.encrypt(decryptedKey);
+                sessionKeyArray = tdesTerminalEncrypter.encrypt(decryptedKey);
                 logger.debug("Encrypted a key (session key): {}", byteArrayToString(sessionKeyArray));
                 sessionKey = new SecretKeySpec(sessionKeyArray, "DES");
                 sessionEncrypter = new Encrypter(DES_TRANSFORMATION, sessionKey);
