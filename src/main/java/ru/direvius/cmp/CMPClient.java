@@ -37,6 +37,8 @@ public class CMPClient {
     private static final byte[] TRANSPORT_KEY = hexStringToByteArray("EF-B1-CF-18-5A-9E-DB-B7-0E-C7-F8-0A-E7-28-9A-EA-24-45-1A-EB-4E-09-E2-FE");
     private static final SecretKey terminalKey = new SecretKeySpec(TERMINAL_KEY, "DESede");
     private static final SecretKey transportKey = new SecretKeySpec(TRANSPORT_KEY, "DESede");
+    private static final Encrypter tdesTerminalEncrypter;
+    private static final Encrypter tdesTransportEncrypter;
     private Encrypter sessionEncrypter;
     private byte[] sessionKeyArray;
     private enum State {
@@ -47,7 +49,23 @@ public class CMPClient {
     private final ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
     private final ScheduledFuture<?> keepAliver;
     private SecretKey sessionKey;
-    
+    static {
+        try {
+            tdesTerminalEncrypter = new Encrypter(TDES_TRANSFORMATION,terminalKey);
+            tdesTransportEncrypter = new Encrypter(TDES_TRANSFORMATION,transportKey);
+        } catch (GeneralSecurityException ex) {
+            logger.error("Could not initialize encrypter for CMPClient", ex);
+            throw new RuntimeException(ex);
+        } 
+    }
+    public CMPClient(InputStream is, OutputStream os){
+        this.is = new BufferedInputStream(is);
+        this.os = new BufferedOutputStream(os);
+        if(logger.isDebugEnabled())logger.debug("Transport key: {}", byteArrayToString(TRANSPORT_KEY));
+        if(logger.isDebugEnabled())logger.debug("Terminal key: {}", byteArrayToString(TERMINAL_KEY));
+        logger.debug("Scheduling a keep-aliver...");
+        keepAliver = ses.scheduleAtFixedRate(new KeepAliver(), 3, 3, TimeUnit.SECONDS);
+    }
     private class KeepAliver implements Runnable {
         public void run() {
             try {
@@ -67,18 +85,21 @@ public class CMPClient {
         }
     }
     public void sendEncrypt(byte[] message) throws IOException, GeneralSecurityException {
+        if(logger.isDebugEnabled()) logger.debug("Encrypting a message: {}", byteArrayToString(message));
+        byte[] encryptedMessage;
         if(message.length%8 == 0){
-            send(sessionEncrypter.encrypt(message));
+            encryptedMessage = sessionEncrypter.encrypt(message);
         } else {
             int ordinalPartLength = (message.length / 8) * 8;
             ByteBuffer ordinalPart = ByteBuffer.allocate(ordinalPartLength);
             ByteBuffer lastBytes = ByteBuffer.allocate(message.length - ordinalPartLength);
             ordinalPart.put(message, 0, ordinalPartLength);
             lastBytes.put(message, ordinalPartLength, message.length - ordinalPartLength);
-            ByteBuffer encryptedMessage = ByteBuffer.allocate(message.length);
-            encryptedMessage.put(sessionEncrypter.decrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
-            send(encryptedMessage.array());
+            ByteBuffer encryptedMessageBuffer = ByteBuffer.allocate(message.length);
+            encryptedMessageBuffer.put(sessionEncrypter.decrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
+            encryptedMessage=encryptedMessageBuffer.array();
         }
+        send(encryptedMessage);
     }
     public synchronized void send(byte[] message) throws IOException {
         if(state!=State.ESTABLISHED) throw new IOException("send operation while connection is down");
@@ -87,7 +108,7 @@ public class CMPClient {
         bb2.put(STX).put(bb.array()).putShort(crc16(bb.array()));
         os.write(bb2.array());
         os.flush();
-        logger.debug("Sent a message: {}", byteArrayToString(message));
+        if(logger.isDebugEnabled())logger.debug("Sent a message: {}", byteArrayToString(message));
         int respCode = is.read();
         if(logger.isDebugEnabled())logger.debug("Response code: {}", String.format("0x%02X",respCode));
         switch(respCode){
@@ -100,18 +121,6 @@ public class CMPClient {
                 throw new IOException("Unknown response code");
         }
     }
-
-    public synchronized void close() throws IOException {
-        if(state!=State.ESTABLISHED) throw new IOException("close operation while connection is down");
-        os.write(EOT);
-        os.flush();
-        keepAliver.cancel(true);
-        is.close();
-        os.close();
-        state = State.DOWN;
-        logger.debug("Closed connection");
-    }
-
     public synchronized void open() throws IOException {
         if(state==State.ESTABLISHED) return; // already opened
         logger.debug("Opening connection...");
@@ -123,16 +132,13 @@ public class CMPClient {
             try {
                 byte[] buff = new byte[ENQ_RESP_LEN];
                 is.read(buff);
-                logger.debug("Received a crypted session key: {}", byteArrayToString(buff));
-                
-                Encrypter tdesTerminalEncrypter = new Encrypter(TDES_TRANSFORMATION,terminalKey);
-                Encrypter tdesTransportEncrypter = new Encrypter(TDES_TRANSFORMATION,transportKey);
-                
+                if(logger.isDebugEnabled())logger.debug("Received a crypted session key: {}", byteArrayToString(buff));
                 byte [] decryptedKey = tdesTransportEncrypter.decrypt(buff);
-                logger.debug("Decrypted a key: {}", byteArrayToString(decryptedKey));
+                if(logger.isDebugEnabled())logger.debug("Decrypted a key: {}", byteArrayToString(decryptedKey));
                 decryptedKey[7] = 0x7;
+                if(logger.isDebugEnabled())logger.debug("Changed last byte to 0x07: {}", byteArrayToString(decryptedKey));
                 sessionKeyArray = tdesTerminalEncrypter.encrypt(decryptedKey);
-                logger.debug("Encrypted a key (session key): {}", byteArrayToString(sessionKeyArray));
+                if(logger.isDebugEnabled())logger.debug("Encrypted a key (session key): {}", byteArrayToString(sessionKeyArray));
                 sessionKey = new SecretKeySpec(sessionKeyArray, "DES");
                 sessionEncrypter = new Encrypter(DES_TRANSFORMATION, sessionKey);
                 state = State.ESTABLISHED;
@@ -146,18 +152,21 @@ public class CMPClient {
     }
     public byte[] receiveDecrypt() throws IOException, GeneralSecurityException {
         byte[] message = receive();
+        byte[] decryptedMessage;
         if(message.length%8 == 0){
-            return sessionEncrypter.decrypt(message);
+            decryptedMessage = sessionEncrypter.decrypt(message);
         } else {
             int ordinalPartLength = (message.length / 8) * 8;
             ByteBuffer ordinalPart = ByteBuffer.allocate(ordinalPartLength);
             ByteBuffer lastBytes = ByteBuffer.allocate(message.length - ordinalPartLength);
             ordinalPart.put(message, 0, ordinalPartLength);
             lastBytes.put(message, ordinalPartLength, message.length - ordinalPartLength);
-            ByteBuffer decryptedMessage = ByteBuffer.allocate(message.length);
-            decryptedMessage.put(sessionEncrypter.decrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
-            return decryptedMessage.array();
+            ByteBuffer decryptedMessageBuffer = ByteBuffer.allocate(message.length);
+            decryptedMessageBuffer.put(sessionEncrypter.decrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
+            decryptedMessage = decryptedMessageBuffer.array();
         }
+        if(logger.isDebugEnabled()) logger.debug("Decrypted a message: {}", byteArrayToString(decryptedMessage));
+        return decryptedMessage;
     }
     public synchronized byte[] receive() throws IOException { 
         logger.debug("Receiving message...");
@@ -166,16 +175,21 @@ public class CMPClient {
         int bytesRead = is.read(buff);
         ByteBuffer bb = ByteBuffer.allocate(bytesRead);
         bb.put(buff,0, bytesRead);
-        logger.debug("Received a message: {}", byteArrayToString(bb.array()));
+        if(logger.isDebugEnabled())logger.debug("Received a message: {}", byteArrayToString(bb.array()));
         return bb.array();
     }
-
-    public CMPClient(InputStream is, OutputStream os) {
-        this.is = new BufferedInputStream(is);
-        this.os = new BufferedOutputStream(os);
-        logger.debug("Scheduling a keep-aliver...");
-        keepAliver = ses.scheduleAtFixedRate(new KeepAliver(), 3, 3, TimeUnit.SECONDS);
+    public synchronized void close() throws IOException {
+        if(state!=State.ESTABLISHED) throw new IOException("close operation while connection is down");
+        os.write(EOT);
+        os.flush();
+        keepAliver.cancel(true);
+        is.close();
+        os.close();
+        state = State.DOWN;
+        logger.debug("Closed connection");
     }
+
+
 
     private short crc16(byte[] buff) {
         short nCRC16 = 0;
@@ -201,7 +215,7 @@ public class CMPClient {
         for(String b : bytes){
             byteBuff.put((byte)(Integer.parseInt(b, 16) - 0x100));
         }
-        logger.debug("Converted a hex string: {}", byteArrayToString(byteBuff.array()));
+        //logger.debug("Converted a hex string: {}", byteArrayToString(byteBuff.array()));
         return byteBuff.array();
     }
     private byte[] symmetric(byte []src){

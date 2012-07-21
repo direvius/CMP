@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 public class App 
 {
     private static final Logger logger = LoggerFactory.getLogger("Main");
-    private static byte[] keyBytes = {0x20, 0x21, 0x22, 0x23, 0x24, 0x26, 0x27, 0x28};
     public static void main( String[] args )
     {
         try {
