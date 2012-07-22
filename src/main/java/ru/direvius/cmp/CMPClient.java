@@ -105,8 +105,10 @@ public class CMPClient {
         if(state!=State.ESTABLISHED) throw new IOException("send operation while connection is down");
         ByteBuffer bb = ByteBuffer.allocate(message.length + 3).putShort((short) message.length).put(message).put(ETX);
         ByteBuffer bb2 = ByteBuffer.allocate(bb.capacity() + 3);
-        bb2.put(STX).put(bb.array()).putShort(crc16(bb.array()));
-        os.write(bb2.array());
+        bb2.put(STX).put(bb.array()).put(crc16(bb.array()));
+        byte [] msgWithCRC = bb2.array();
+        if(logger.isDebugEnabled()) logger.debug("Message dump with CRC (STX(0x02)|MLEN|MSG|ETX(0x03)|CRC16: {}", byteArrayToString(msgWithCRC));
+        os.write(msgWithCRC);
         os.flush();
         if(logger.isDebugEnabled())logger.debug("Sent a message: {}", byteArrayToString(message));
         int respCode = is.read();
@@ -171,6 +173,7 @@ public class CMPClient {
     public synchronized byte[] receive() throws IOException { 
         logger.debug("Receiving message...");
         if(state!=State.ESTABLISHED) throw new IOException("receive operation while connection is down");
+        //TODO: add STX, ETX, message length, crc.
         byte[] buff = new byte[1024];
         int bytesRead = is.read(buff);
         ByteBuffer bb = ByteBuffer.allocate(bytesRead);
@@ -191,15 +194,25 @@ public class CMPClient {
 
 
 
-    private short crc16(byte[] buff) {
-        short nCRC16 = 0;
+    public static byte[] crc16(byte[] buff) {
+        int nCRC16 = 0;
         for (byte b : buff) {
-            short a1 = (short) (b ^ nCRC16);
-            short a2 = (short) (a1 << 4);
-            short a3 = (short) (a1 ^ a2);
-            nCRC16 = (short) ((nCRC16 >> 8) ^ (a3 >> 12) ^ (a3 >> 5) ^ a3);
+            int dt = (int)b & 0x00FF;
+            //logger.debug(String.format("b: %08X", dt));
+            int a1 = (dt ^ nCRC16) & 0xFFFF;
+            //logger.debug(String.format("a1: %08X", a1));
+            int a2 = (a1 << 4) & 0xFFFF;
+            //logger.debug(String.format("a2: %08X", a2));
+            int a3 = (a1 ^ a2) & 0xFFFF;
+            //logger.debug(String.format("a3: %08X", a3));
+            nCRC16 = ((nCRC16 >> 8) ^ (a3 >> 12) ^ (a3 >> 5) ^ a3) & 0xFFFF;
+            //logger.debug(String.format("crc: %08X", nCRC16));
         }
-        return nCRC16;
+        ByteBuffer bb = ByteBuffer.allocate(2);
+        bb.put((byte)((nCRC16 & 0xFF00) >> 8)).put((byte)(nCRC16 & 0xFF));
+        if(logger.isDebugEnabled())logger.debug("CRC for {}: {}", byteArrayToString(buff), byteArrayToString(bb.array()));
+        
+        return bb.array();
     }
     public static String byteArrayToString(byte[] bytes){
         StringWriter sw = new StringWriter();
