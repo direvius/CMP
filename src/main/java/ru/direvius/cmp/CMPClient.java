@@ -96,7 +96,7 @@ public class CMPClient {
             ordinalPart.put(message, 0, ordinalPartLength);
             lastBytes.put(message, ordinalPartLength, message.length - ordinalPartLength);
             ByteBuffer encryptedMessageBuffer = ByteBuffer.allocate(message.length);
-            encryptedMessageBuffer.put(sessionEncrypter.decrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
+            encryptedMessageBuffer.put(sessionEncrypter.encrypt(ordinalPart.array())).put(symmetric(lastBytes.array()));
             encryptedMessage=encryptedMessageBuffer.array();
         }
         send(encryptedMessage);
