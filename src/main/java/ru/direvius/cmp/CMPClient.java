@@ -176,12 +176,19 @@ public class CMPClient {
         logger.debug("Receiving message...");
         if(state!=State.ESTABLISHED) throw new IOException("receive operation while connection is down");
         //TODO: add STX, ETX, message length, crc.
-        byte[] buff = new byte[1024];
+        int stx = is.read();
+        if(stx!=STX) throw new IOException("STX excepted but received: "+String.format("%02X", stx));
+        int messageLength = (is.read()<<16) | is.read();
+        if(logger.isDebugEnabled())logger.debug("Message length: {}", String.format("%02X", messageLength));
+        byte[] buff = new byte[messageLength];
         int bytesRead = is.read(buff);
-        ByteBuffer bb = ByteBuffer.allocate(bytesRead);
-        bb.put(buff,0, bytesRead);
-        if(logger.isDebugEnabled())logger.debug("Received a message: {}", byteArrayToString(bb.array()));
-        return bb.array();
+        if(bytesRead < messageLength) throw new IOException("Received message length is letter then it's been told: "+String.format("%04X vs %04X", bytesRead, messageLength));
+        int etx = is.read();
+        if(etx!=ETX) throw new IOException("ETX excepted but received: "+String.format("%02X", etx));
+        int crc = (is.read()<<8) | is.read();
+        if(logger.isDebugEnabled())logger.debug("Received a message: {}, crc: {}", byteArrayToString(buff), String.format("%02X", crc));
+        os.write(ACK);
+        return buff;
     }
     public synchronized void close() throws IOException {
         if(state!=State.ESTABLISHED) throw new IOException("close operation while connection is down");
@@ -193,7 +200,6 @@ public class CMPClient {
         state = State.DOWN;
         logger.debug("Closed connection");
     }
-
 
 
     public static byte[] crc16(byte[] buff) {
