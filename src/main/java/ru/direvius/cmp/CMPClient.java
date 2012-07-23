@@ -142,6 +142,8 @@ public class CMPClient {
                 sessionKeyArray = tdesTerminalEncrypter.encrypt(decryptedKey);
                 if(logger.isDebugEnabled())logger.debug("Encrypted a key (session key): {}", byteArrayToString(sessionKeyArray));
                 sessionKey = new SecretKeySpec(sessionKeyArray, "DES");
+                //byte[] iv ={0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+                //IvParameterSpec ips = new IvParameterSpec(iv);
                 sessionEncrypter = new Encrypter(DES_TRANSFORMATION, sessionKey);
                 state = State.ESTABLISHED;
                 logger.debug("Opened connection");

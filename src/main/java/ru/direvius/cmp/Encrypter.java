@@ -4,9 +4,11 @@
  */
 package ru.direvius.cmp;
 
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
 
 /**
  *
@@ -22,7 +24,12 @@ public class Encrypter {
         ecipher.init(Cipher.ENCRYPT_MODE, key);
         dcipher.init(Cipher.DECRYPT_MODE, key);
     }
-
+    Encrypter(String transformation, SecretKey key, IvParameterSpec ips) throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException {
+        ecipher = Cipher.getInstance(transformation);
+        dcipher = Cipher.getInstance(transformation);
+        ecipher.init(Cipher.ENCRYPT_MODE, key, ips);
+        dcipher.init(Cipher.DECRYPT_MODE, key, ips);
+    }
     public byte[] encrypt(byte[] message) throws IllegalBlockSizeException, BadPaddingException {
         byte[] enc = ecipher.doFinal(message);
         return enc;
