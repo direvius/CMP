@@ -23,7 +23,7 @@ public class App {
             CMPClient cc = new CMPClient(s.getInputStream(), s.getOutputStream());
             cc.open();
             //cc.sendEncrypt(Util.hexStringToByteArray("01-01-01-02-04-00-87-82-F8-03-08-09-00-00-00-10-40-92-59-04-04-4F-C8-52-CE"));
-            cc.sendEncrypt(new CardInfoRequestBuilder((byte)1, 0x8782F8, 0x0900000010409259L, new Date()).build());
+            cc.sendEncrypt(new CardInfoRequestBuilder((byte)1, 0x8782F8, 900000010409259L, new Date()).build());
             cc.receiveDecrypt();
             Thread.sleep(5000);
             cc.close();

@@ -219,7 +219,7 @@ public class CMPClient {
         if (stx != STX) {
             throw new IOException("STX excepted but received: " + String.format("%02X", stx));
         }
-        int messageLength = (is.read() << 16) | is.read();
+        int messageLength = (is.read() << 8) | is.read();
         if (logger.isDebugEnabled()) {
             logger.debug("Message length: {}", String.format("%02X", messageLength));
         }
