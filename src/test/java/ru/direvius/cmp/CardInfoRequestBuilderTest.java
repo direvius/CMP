@@ -32,7 +32,7 @@ public class CardInfoRequestBuilderTest extends TestCase {
      */
     public void testBuild() {
         System.out.println("build");
-        CardInfoRequestBuilder instance = new CardInfoRequestBuilder((byte)1, 0x8782F8, 0x0900000010409259L, new Date());
+        CardInfoRequestBuilder instance = new CardInfoRequestBuilder(0x8782F8, 0x0900000010409259L, new Date());
         System.out.println(Util.byteArrayToString(instance.build()));
     }
 

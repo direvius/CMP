@@ -12,7 +12,11 @@ class TLV {
     TLV(byte tag, byte[] value) {
         this.tag = tag;
         this.value = value;
-        this.lengthField = ByteBuffer.allocate(1).put((byte) value.length).array();
+        if((value.length & 0x80) > 0){
+            this.lengthField = ByteBuffer.allocate(2).put((byte) 0x81).put((byte) value.length).array();
+        }else{
+            this.lengthField = ByteBuffer.allocate(1).put((byte) value.length).array();
+        }
         this.length = value.length + lengthField.length + 1;
     }
 

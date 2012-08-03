@@ -12,14 +12,14 @@ import java.util.Date;
  */
 public class CardInfoRequestBuilder implements RequestBuilder {
 
-    private TLVChainBuilder tcb = new TLVChainBuilder();
+    private final TLVChainBuilder tcb = new TLVChainBuilder();
 
     public byte[] build() {
         return tcb.asByteArray();
     }
 
-    public CardInfoRequestBuilder(byte id, int terminalID, long cardNumber, Date dt) {
-        tcb.putByte((byte) 0x01, id).putInt((byte) 0x02, terminalID).putBCD((byte) 0x03, cardNumber).putDate((byte) 0x04, dt);
+    public CardInfoRequestBuilder(int terminalID, long cardNumber, Date dt) {
+        tcb.putByte((byte) 0x01, (byte) 0x01).putInt((byte) 0x02, terminalID).putBCD((byte) 0x03, cardNumber).putDate((byte) 0x04, dt);
     }
 
     public CardInfoRequestBuilder addTransactionID(int transactionID) {
