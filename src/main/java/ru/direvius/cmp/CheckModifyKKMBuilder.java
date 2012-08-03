@@ -1,4 +1,3 @@
-// DOES NOT WORK
 package ru.direvius.cmp;
 
 /**
