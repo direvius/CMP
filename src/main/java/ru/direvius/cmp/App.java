@@ -25,10 +25,18 @@ public class App {
             cc.sendEncrypt(new CardInfoRequestBuilder(0x8782F8, 900000010409259L, new Date()).build());
             cc.receiveDecrypt();
             cc.sendEncrypt(new BonusRequestBuilder(new Date()).build());
+            //cc.sendEncrypt(new PartlyReturnRequestBuilder(new Date()).build());
             cc.receiveDecrypt();
             cc.sendEncrypt(new CloseCheckRequestBuilder().build());
             cc.receiveDecrypt();
             Thread.sleep(5000);
+            cc.sendEncrypt(new CardInfoRequestBuilder(0x8782F8, 900000010409259L, new Date()).build());
+            cc.receiveDecrypt();
+            //cc.sendEncrypt(new BonusRequestBuilder(new Date()).build());
+            cc.sendEncrypt(new PartlyReturnRequestBuilder(new Date()).build());
+            cc.receiveDecrypt();
+            //cc.sendEncrypt(new CloseCheckRequestBuilder().build());
+            //cc.receiveDecrypt();
             cc.close();
         } catch (GeneralSecurityException ex) {
             logger.error("Cryptography problem", ex);
