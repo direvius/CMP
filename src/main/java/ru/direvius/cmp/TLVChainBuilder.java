@@ -38,7 +38,7 @@ public class TLVChainBuilder {
     }
 
     public TLVChainBuilder putDate(byte tag, Date dt) {
-        chain.add(new TLV(tag, ByteBuffer.allocate(4).putInt((int) dt.getTime() / 1000).array()));
+        chain.add(new TLV(tag, ByteBuffer.allocate(8).putLong(dt.getTime()/1000).array()));
         return this;
     }
 

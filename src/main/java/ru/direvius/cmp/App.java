@@ -22,6 +22,8 @@ public class App {
             Socket s = new Socket("10.0.3.70", 688);
             CMPClient cc = new CMPClient(s.getInputStream(), s.getOutputStream());
             cc.open();
+            //System.out.println(new Date().getTime());
+            //System.exit(0);
             cc.sendEncrypt(new CardInfoRequestBuilder(0x8782F8, 900000010409259L, new Date()).build());
             cc.receiveDecrypt();
             cc.sendEncrypt(new BonusRequestBuilder(new Date()).build());
