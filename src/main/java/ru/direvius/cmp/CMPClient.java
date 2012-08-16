@@ -6,7 +6,6 @@ import java.security.GeneralSecurityException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
@@ -47,7 +46,7 @@ public class CMPClient {
     }
     private State state = State.DOWN;
     private final ScheduledExecutorService ses = Executors.newSingleThreadScheduledExecutor();
-    private final ScheduledFuture<?> keepAliver;
+    //private ScheduledFuture<?> keepAliver;
     private SecretKey sessionKey;
 
     static {
@@ -69,8 +68,6 @@ public class CMPClient {
         if (logger.isDebugEnabled()) {
             logger.debug("Terminal key: {}", Util.byteArrayToString(TERMINAL_KEY));
         }
-        logger.debug("Scheduling a keep-aliver...");
-        keepAliver = ses.scheduleAtFixedRate(new KeepAliver(), 3, 3, TimeUnit.SECONDS);
     }
 
     private class KeepAliver implements Runnable {
@@ -246,7 +243,7 @@ public class CMPClient {
         }
         os.write(EOT);
         os.flush();
-        keepAliver.cancel(true);
+        //keepAliver.cancel(true);
         is.close();
         os.close();
         state = State.DOWN;
